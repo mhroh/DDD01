@@ -11,6 +11,9 @@ def get_authorize():
     Returns:
         gspread.Client: 인증된 gspread 클라이언트 객체
 
+    Raises:
+        Exception: 인증 실패 시 예외 발생
+
     이 함수는 다음과 같은 작업을 수행합니다:
     1. Streamlit의 secrets에서 서비스 계정 키 정보를 가져옵니다.
     2. 가져온 정보를 사용하여 Credentials 객체를 생성합니다.
@@ -20,28 +23,34 @@ def get_authorize():
     - 이 함수는 Streamlit의 st.secrets를 사용하여 민감한 인증 정보를 안전하게 관리합니다.
     - Google Sheets API에 대한 접근 범위는 'https://www.googleapis.com/auth/spreadsheets'로 설정됩니다.
     """
-    
-    # 서비스 계정 key 정보를 딕셔너리 형태로 정의합니다.
-    service_account_info = {
-        "type": st.secrets["type"],
-        "project_id": st.secrets["project_id"],
-        "private_key_id": st.secrets["private_key_id"],
-        "private_key": st.secrets["private_key"],
-        "client_email": st.secrets["client_email"],
-        "client_id": st.secrets["client_id"],
-        "auth_uri": st.secrets["auth_uri"],
-        "token_uri": st.secrets["token_uri"],
-        "auth_provider_x509_cert_url": st.secrets["auth_provider_x509_cert_url"],
-        "client_x509_cert_url": st.secrets["client_x509_cert_url"],
-        "universe_domain": st.secrets["universe_domain"]
-    }
+    try:
+        # 서비스 계정 key 정보를 딕셔너리 형태로 정의합니다.
+        service_account_info = {
+            "type": st.secrets["type"],
+            "project_id": st.secrets["project_id"],
+            "private_key_id": st.secrets["private_key_id"],
+            "private_key": st.secrets["private_key"],
+            "client_email": st.secrets["client_email"],
+            "client_id": st.secrets["client_id"],
+            "auth_uri": st.secrets["auth_uri"],
+            "token_uri": st.secrets["token_uri"],
+            "auth_provider_x509_cert_url": st.secrets["auth_provider_x509_cert_url"],
+            "client_x509_cert_url": st.secrets["client_x509_cert_url"],
+            "universe_domain": st.secrets["universe_domain"]
+        }
 
-    # Credentials 객체 생성
-    SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-    creds = Credentials.from_service_account_info(service_account_info, scopes=SCOPES)
+        # Credentials 객체 생성
+        SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+        creds = Credentials.from_service_account_info(service_account_info, scopes=SCOPES)
 
-    # gspread 클라이언트 생성
-    return gspread.authorize(creds)
+        # gspread 클라이언트 생성
+        return gspread.authorize(creds)
+    except KeyError as e:
+        st.error(f"Google Sheets 인증 정보가 누락되었습니다: {str(e)}")
+        raise
+    except Exception as e:
+        st.error(f"Google Sheets 인증 중 오류가 발생했습니다: {str(e)}")
+        raise
 
 def getSetupInfo():
     """
@@ -62,6 +71,9 @@ def getSetupInfo():
             - e_p: 평어 프롬프트
             - stream: 스트리밍 모드 사용 여부 (불리언)
 
+    Raises:
+        Exception: 설정 정보 로드 실패 시 예외 발생
+
     Note:
     - 이 함수는 st.secrets["sheet_url"]에 저장된 URL의 Google Sheets에서 정보를 가져옵니다.
     - "정보" 워크시트의 2번째 열에서 데이터를 읽어옵니다.
@@ -79,27 +91,37 @@ def getSetupInfo():
     10 e_p
     11 stream
     """
+    try:
+        gc = get_authorize()
+        ws = gc.open_by_url(st.secrets["sheet_url"]).worksheet("정보")
 
-    gc = get_authorize()
-    ws = gc.open_by_url(st.secrets["sheet_url"]).worksheet("정보")
-    
-    # 정보 데이터 가져오기
-    data = ws.col_values(2)
-    temp = {}
-    temp["url"] = data[0]
-    temp["serviceOnOff"] = data[1].lower()
-    temp["AI"] = data[2]
-    temp["key"] = data[3]
-    temp["model"] = data[4]
-    temp["max_tokens"] = int(data[5])
-    temp["temperature"] = float(data[6])
-    temp["select"] = data[7]
-    temp["system"] = data[8]
-    temp["a_p"] = data[9]
-    temp["e_p"] = data[10]
-    temp["stream"] = True if data[11].lower() == 'true' else False   
-    
-    return temp
+        # 정보 데이터 가져오기
+        data = ws.col_values(2)
+
+        if len(data) < 12:
+            raise ValueError(f"설정 데이터가 충분하지 않습니다. 필요: 12개, 실제: {len(data)}개")
+
+        temp = {}
+        temp["url"] = data[0]
+        temp["serviceOnOff"] = data[1].lower()
+        temp["AI"] = data[2]
+        temp["key"] = data[3]
+        temp["model"] = data[4]
+        temp["max_tokens"] = int(data[5])
+        temp["temperature"] = float(data[6])
+        temp["select"] = data[7]
+        temp["system"] = data[8]
+        temp["a_p"] = data[9]
+        temp["e_p"] = data[10]
+        temp["stream"] = True if data[11].lower() == 'true' else False
+
+        return temp
+    except ValueError as e:
+        st.error(f"설정 정보 파싱 오류: {str(e)}")
+        raise
+    except Exception as e:
+        st.error(f"설정 정보를 불러오는 중 오류가 발생했습니다: {str(e)}")
+        raise
 
 def add_Content(role, content):
     """
