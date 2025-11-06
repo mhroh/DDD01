@@ -5,6 +5,13 @@ from anthropic import APIError, APIConnectionError, APITimeoutError, RateLimitEr
 from utils import gs
 import time
 
+# 상수 정의
+WARNING_DISPLAY_TIME = 1  # 경고 메시지 표시 시간 (초)
+SYSTEM_MESSAGE_INDEX = 1  # 시스템 메시지 인덱스
+EVALUATION_COLUMN_OFFSET = 1  # 종합 평가 열 오프셋
+COMMENT_COLUMN_OFFSET = 2  # 평어 열 오프셋
+USER_NAME_COLUMN = 1  # 사용자 이름 검색 열
+
 if "processing" not in st.session_state:
     st.session_state.processing = False
 
@@ -97,7 +104,7 @@ def main():
         if not user_name:
             st.warning('대화명을 입력해 주세요!', icon='⚠️')
 
-            time.sleep(1)
+            time.sleep(WARNING_DISPLAY_TIME)
             disable_input(False)
             st.rerun()
 
@@ -116,13 +123,13 @@ def main():
             with st.chat_message("assistant"):
                 message_placeholder = st.empty()
                 message_placeholder.write("......")
-                stream = execute_prompt(st.session_state.messages[1:])
+                stream = execute_prompt(st.session_state.messages[SYSTEM_MESSAGE_INDEX:])
 
                 if stream == None:
                     delete_message()
 
                     disable_input(False)
-                    time.sleep(1)
+                    time.sleep(WARNING_DISPLAY_TIME)
                     st.rerun()
 
                     return
@@ -244,7 +251,7 @@ def end_conversation():
     setupInfo = st.session_state['setupInfo']
     a_p = setupInfo["a_p"]
     e_p = setupInfo["e_p"]
-    messages = st.session_state.messages[1:]
+    messages = st.session_state.messages[SYSTEM_MESSAGE_INDEX:]
     full_response = ""
 
     # 종합평가
@@ -254,8 +261,8 @@ def end_conversation():
     full_response = message_processing(stream)
     add_message(messages, "assistant", full_response, withGS = False)
 
-    cell = sheet.find(st.session_state["user_name_1"], in_column = 1)
-    sheet.update_cell(cell.row, cell.col + 1, full_response)
+    cell = sheet.find(st.session_state["user_name_1"], in_column=USER_NAME_COLUMN)
+    sheet.update_cell(cell.row, cell.col + EVALUATION_COLUMN_OFFSET, full_response)
     st.success("1/2 완료")
 
     # 평어
@@ -266,7 +273,7 @@ def end_conversation():
     full_response = message_processing(stream)
     add_message(messages, "assistant", full_response, withGS = False)
 
-    sheet.update_cell(cell.row, cell.col + 2, full_response)
+    sheet.update_cell(cell.row, cell.col + COMMENT_COLUMN_OFFSET, full_response)
     st.success("2/2 완료")
     log_p("평가 완료")
 

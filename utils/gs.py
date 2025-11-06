@@ -52,6 +52,7 @@ def get_authorize():
         st.error(f"Google Sheets 인증 중 오류가 발생했습니다: {str(e)}")
         raise
 
+@st.cache_data(ttl=300)  # 5분간 캐싱하여 API 호출 최소화
 def getSetupInfo():
     """
     Google Sheets에서 설정 정보를 가져오는 함수입니다.
