@@ -1,10 +1,16 @@
-import functools
 import streamlit as st
 from streamlit import logger
 import anthropic
 from anthropic import APIError, APIConnectionError, APITimeoutError, RateLimitError, APIStatusError
 from utils import gs
 import time
+
+# 상수 정의
+WARNING_DISPLAY_TIME = 1  # 경고 메시지 표시 시간 (초)
+SYSTEM_MESSAGE_INDEX = 1  # 시스템 메시지 인덱스
+EVALUATION_COLUMN_OFFSET = 1  # 종합 평가 열 오프셋
+COMMENT_COLUMN_OFFSET = 2  # 평어 열 오프셋
+USER_NAME_COLUMN = 1  # 사용자 이름 검색 열
 
 if "processing" not in st.session_state:
     st.session_state.processing = False
@@ -14,7 +20,7 @@ def disable_input(value):
 
 def initialize(api_key, nick_name):
     """
-    애플리케이션의 초기 설정을 수행하는 함수입니다. ...
+    애플리케이션의 초기 설정을 수행하는 함수입니다.
 
     Parameters:
     api_key (str): Anthropic API 키
@@ -27,21 +33,28 @@ def initialize(api_key, nick_name):
 
     이 함수는 이미 초기화가 완료된 경우 아무 작업도 수행하지 않습니다.
     """
-    if "bot" and "sheet" in st.session_state:
+    if "bot" in st.session_state and "sheet" in st.session_state:
         return
-    
-    log_p("초기화 시작")
-    # Anthropic
-    st.session_state["api_key"] = api_key
-    st.session_state["bot"] = anthropic.Anthropic(api_key = api_key)
-    st.session_state["user_name_1"] = nick_name
 
-    # Google Spread Sheet
-    gc = gs.get_authorize()
-    sheet_url = st.session_state["setupInfo"]["url"]
-    st.session_state["doc"] = gc.open_by_url(sheet_url)
-    st.session_state["sheet"] = gs.get_worksheet(st.session_state["doc"], nick_name)
-    log_p("초기화 완료")
+    try:
+        log_p("초기화 시작")
+
+        # Anthropic
+        st.session_state["api_key"] = api_key
+        st.session_state["bot"] = anthropic.Anthropic(api_key=api_key)
+        st.session_state["user_name_1"] = nick_name
+
+        # Google Spread Sheet
+        gc = gs.get_authorize()
+        sheet_url = st.session_state["setupInfo"]["url"]
+        st.session_state["doc"] = gc.open_by_url(sheet_url)
+        st.session_state["sheet"] = gs.get_worksheet(st.session_state["doc"], nick_name)
+
+        log_p("초기화 완료")
+    except Exception as e:
+        log_p(f"ERROR: 초기화 중 오류 발생: {str(e)}")
+        st.error(f"초기화 중 오류가 발생했습니다: {str(e)}")
+        raise
 
 def set_class_info():
     log_p("클래스 정보 설정")
@@ -91,7 +104,7 @@ def main():
         if not user_name:
             st.warning('대화명을 입력해 주세요!', icon='⚠️')
 
-            time.sleep(3)
+            time.sleep(WARNING_DISPLAY_TIME)
             disable_input(False)
             st.rerun()
 
@@ -110,13 +123,13 @@ def main():
             with st.chat_message("assistant"):
                 message_placeholder = st.empty()
                 message_placeholder.write("......")
-                stream = execute_prompt(st.session_state.messages[1:])
+                stream = execute_prompt(st.session_state.messages[SYSTEM_MESSAGE_INDEX:])
 
                 if stream == None:
                     delete_message()
 
                     disable_input(False)
-                    time.sleep(3)
+                    time.sleep(WARNING_DISPLAY_TIME)
                     st.rerun()
 
                     return
@@ -128,7 +141,6 @@ def main():
             disable_input(False)
             st.rerun()
 
-@st.cache_data 
 def log_p(message):
     """
     콘솔에 메세지 출력하기
@@ -185,17 +197,6 @@ def execute_prompt(messages):
 
     return None
 
-def wiget_on_off(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        st.session_state["processing"] = True
-        
-        result = func(*args, **kwargs)
-
-        st.session_state["processing"] = False
-        return result    
-    return wrapper
-
 def message_processing(stream, output = None):
     """
     스트리밍 응답을 처리하고 전체 응답을 구성하는 함수입니다.
@@ -243,25 +244,14 @@ def end_conversation():
 
     이 함수는 세션 상태에 저장된 설정 정보와 메시지 기록을 사용합니다.
     """
-    st.success("1/2 작업중......")
-    time.sleep(2)
-    st.success("1/2 완료")
-    time.sleep(2)
-    st.success("2/2 작업중......")
-    time.sleep(2)
-    st.success("2/2 완료")
-    time.sleep(2)
-    
-    return 
-
     log_p("평가 시작")
 
-    # TODO 종합평가, 평어를 시트에 저장
+    # 종합평가, 평어를 시트에 저장
     sheet = gs.get_summary_sheet(st.session_state["doc"])
     setupInfo = st.session_state['setupInfo']
     a_p = setupInfo["a_p"]
     e_p = setupInfo["e_p"]
-    messages = st.session_state.messages[1:]
+    messages = st.session_state.messages[SYSTEM_MESSAGE_INDEX:]
     full_response = ""
 
     # 종합평가
@@ -270,11 +260,11 @@ def end_conversation():
     stream = execute_prompt(messages)
     full_response = message_processing(stream)
     add_message(messages, "assistant", full_response, withGS = False)
-    
-    cell = sheet.find(st.session_state["user_name_1"], in_column = 1)
-    sheet.update_cell(cell.row, cell.col + 1, full_response)
+
+    cell = sheet.find(st.session_state["user_name_1"], in_column=USER_NAME_COLUMN)
+    sheet.update_cell(cell.row, cell.col + EVALUATION_COLUMN_OFFSET, full_response)
     st.success("1/2 완료")
-    
+
     # 평어
     st.success("2/2 작업중......")
     full_response = ""
@@ -283,7 +273,7 @@ def end_conversation():
     full_response = message_processing(stream)
     add_message(messages, "assistant", full_response, withGS = False)
 
-    sheet.update_cell(cell.row, cell.col + 2, full_response)
+    sheet.update_cell(cell.row, cell.col + COMMENT_COLUMN_OFFSET, full_response)
     st.success("2/2 완료")
     log_p("평가 완료")
 
