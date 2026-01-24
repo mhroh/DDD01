@@ -4,6 +4,7 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+@st.cache_resource
 def get_authorize():
     """
     Google Sheets API에 접근하기 위한 인증된 gspread 클라이언트를 생성하는 함수입니다.
@@ -43,6 +44,7 @@ def get_authorize():
     # gspread 클라이언트 생성
     return gspread.authorize(creds)
 
+@st.cache_data(ttl=300)
 def getSetupInfo():
     """
     Google Sheets에서 설정 정보를 가져오는 함수입니다.
