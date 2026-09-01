@@ -384,15 +384,21 @@ def execute_prompt(messages):
     client = st.session_state["bot"]
     
     try:
-        stream = client.messages.create(
-                        model = setupInfo['model'],
-                        max_tokens = setupInfo['max_tokens'],
-                        temperature = setupInfo['temperature'],
-                        cache_control = {"type": "ephemeral"},
-                        system = setupInfo['system'],
-                        messages = messages,
-                        stream = setupInfo['stream']
-        )
+        request_params = {
+            "model": setupInfo["model"],
+            "max_tokens": setupInfo["max_tokens"],
+            "cache_control": {"type": "ephemeral"},
+            "system": setupInfo["system"],
+            "messages": messages,
+            "stream": setupInfo["stream"],
+        }
+
+        # Sonnet 5 rejects non-default sampling parameters. Older models keep
+        # using the temperature value managed in the Google Sheet.
+        if setupInfo["model"] != "claude-sonnet-5":
+            request_params["temperature"] = setupInfo["temperature"]
+
+        stream = client.messages.create(**request_params)
 
         return stream
     except APITimeoutError as e:
@@ -448,7 +454,10 @@ def message_processing(stream, output = None):
 
     for chunk in stream:
         if chunk.type == "content_block_delta":
-            full_response += chunk.delta.text
+            # Sonnet 5 enables adaptive thinking by default, so the stream can
+            # contain thinking_delta events as well as text_delta events.
+            if getattr(chunk.delta, "type", None) == "text_delta":
+                full_response += chunk.delta.text
         elif chunk.type == "message_start":
             # 메시지 시작 이벤트 처리 (필요한 경우)
             pass
