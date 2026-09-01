@@ -395,7 +395,9 @@ def execute_prompt(messages):
 
         # Sonnet 5 rejects non-default sampling parameters. Older models keep
         # using the temperature value managed in the Google Sheet.
-        if setupInfo["model"] != "claude-sonnet-5":
+        if setupInfo["model"] == "claude-sonnet-5":
+            request_params["thinking"] = {"type": "disabled"}
+        else:
             request_params["temperature"] = setupInfo["temperature"]
 
         stream = client.messages.create(**request_params)
