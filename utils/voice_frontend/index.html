@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font:14px system-ui,sans-serif;margin:4px;color:#263445}button{font:inherit;padding:10px 15px;border:1px solid #ccd3dc;border-radius:10px;background:#fff;cursor:pointer}button:disabled{opacity:.5;cursor:default}#mic{background:#edf5ff}#status{margin:8px 0}#transcript{white-space:pre-wrap;max-height:64px;overflow:auto}small{display:block;color:#687484;margin-top:8px} [hidden]{display:none!important}</style></head>
+<body><button id="mic" disabled>🎙 말하기</button> <button id="cancel" hidden>취소</button> <button id="replay" hidden>🔊 답변 듣기</button>
+<div id="status" role="status" aria-live="polite">음성 기능 준비 중</div><div id="transcript"></div>
+<small>말을 마치면 자동 전송하고 답변을 읽어줍니다. Chrome 권장 · 음성은 브라우저 제공자의 인식 서비스에서 처리될 수 있습니다.</small>
+<script>
+const mic=document.getElementById('mic'), cancel=document.getElementById('cancel'), replay=document.getElementById('replay'), statusEl=document.getElementById('status'), transcript=document.getElementById('transcript');
+const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+let args={}, recognition=null, listening=false, waiting=false, speaking=false, cancelled=false, failed=false, finalText='', lastReply=null, pending=null, watchdog=null;
+const send=(type,data)=>parent.postMessage({isStreamlitMessage:true,type,...data},'*');
+function controls(){mic.disabled=!Recognition||!args.enabled||waiting||speaking;mic.textContent=listening?'말 마침':'🎙 말하기';cancel.hidden=!listening;}
+function say(text){
+ if(!window.speechSynthesis){statusEl.textContent='이 브라우저는 읽어주기를 지원하지 않습니다.';return;}
+ const clean=text.replace(/```[\s\S]*?```/g,' 코드 내용은 화면을 확인하세요. ').replace(/[*#`_]/g,'').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1');
+ const chunks=clean.match(/[^.!?。\n]+[.!?。\n]*|[.!?。\n]+/g)||[clean];
+ speechSynthesis.cancel(); speaking=true;controls();statusEl.textContent='답변을 읽고 있어요.';
+ function next(){if(!chunks.length){speaking=false;controls();statusEl.textContent='다음 질문은 말하기 버튼을 눌러 주세요.';return;}const u=new SpeechSynthesisUtterance(chunks.shift());u.lang='ko-KR';const v=speechSynthesis.getVoices().find(v=>v.lang.startsWith('ko'));if(v)u.voice=v;u.onend=next;u.onerror=()=>{speaking=false;controls();statusEl.textContent='자동 재생이 차단됐습니다. 답변 듣기를 눌러 주세요.';};speechSynthesis.speak(u);}next();
+}
+mic.onclick=()=>{
+ if(listening){recognition.stop();return;}
+ if(!Recognition||waiting||speaking)return;
+ cancelled=false;failed=false;finalText='';transcript.textContent='';
+ // Unlock speech playback during this explicit user gesture where supported.
+ if(window.speechSynthesis){speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(' ');u.lang='ko-KR';speechSynthesis.speak(u);}
+ recognition=new Recognition();recognition.lang='ko-KR';recognition.continuous=false;recognition.interimResults=true;
+ recognition.onstart=()=>{listening=true;controls();statusEl.textContent='듣고 있어요. 말을 마치면 자동으로 보냅니다.';};
+ recognition.onresult=e=>{let draft='';finalText='';for(let i=0;i<e.results.length;i++){const t=e.results[i][0].transcript;if(e.results[i].isFinal)finalText+=t;else draft+=t;}transcript.textContent=finalText+draft;};
+ recognition.onerror=e=>{failed=true;statusEl.textContent=({'not-allowed':'마이크 사용을 허용한 뒤 다시 눌러 주세요.','audio-capture':'연결된 마이크를 확인해 주세요.','no-speech':'말소리를 듣지 못했어요. 다시 눌러 주세요.','network':'음성 인식 연결이 안 됩니다. 글자로 질문할 수 있어요.'})[e.error]||'음성 인식을 사용할 수 없습니다. 글자로 질문해 주세요.';};
+ recognition.onend=()=>{listening=false;controls();if(cancelled||failed)return;if(!finalText.trim()){statusEl.textContent='인식된 말이 없어요. 다시 눌러 주세요.';return;}pending=crypto.randomUUID();waiting=true;controls();statusEl.textContent='질문을 보냈어요. 답변을 기다리고 있습니다.';send('streamlit:setComponentValue',{value:{id:pending,text:finalText},dataType:'json'});clearTimeout(watchdog);watchdog=setTimeout(()=>{if(waiting){waiting=false;controls();statusEl.textContent='답변이 지연되고 있습니다. 화면의 오류 안내를 확인해 주세요.';}},45000);};
+ try{recognition.start();}catch(e){listening=false;controls();statusEl.textContent='마이크를 시작하지 못했습니다. 다시 눌러 주세요.';}
+};
+cancel.onclick=()=>{cancelled=true;recognition?.abort();statusEl.textContent='취소했습니다.';};
+replay.onclick=()=>{if(args.reply?.text)say(args.reply.text);};
+window.addEventListener('message',e=>{if(e.source!==parent||e.data?.type!=='streamlit:render')return;args=e.data.args||{};const reply=args.reply;if(reply&&reply.id!==lastReply){lastReply=reply.id;if(reply.id===pending){waiting=false;clearTimeout(watchdog);pending=null;replay.hidden=false;say(reply.text);}}if(!Recognition)statusEl.textContent='이 브라우저는 음성 인식을 지원하지 않습니다. Chrome에서 열어 주세요.';else if(!args.enabled&&!waiting&&!speaking)statusEl.textContent='대화명을 먼저 입력해 주세요.';else if(!listening&&!waiting&&!speaking)statusEl.textContent='말하기를 누르고 바로 이야기하세요.';controls();send('streamlit:setFrameHeight',{height:190});});
+window.addEventListener('pagehide',()=>{cancelled=true;recognition?.abort();speechSynthesis?.cancel();clearTimeout(watchdog);});
+send('streamlit:componentReady',{apiVersion:1});send('streamlit:setFrameHeight',{height:190});
+</script></body></html>
