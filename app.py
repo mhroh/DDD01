@@ -13,6 +13,11 @@ if "processing" not in st.session_state:
 def disable_input(value):
     st.session_state.processing = value
 
+def submit_prompt():
+    # Preserve the submitted value before the disabled widget discards it.
+    st.session_state.pending_prompt = st.session_state.chat_prompt
+    disable_input(True)
+
 def now_kst():
     kst = timezone(timedelta(hours=9))
     return datetime.now(kst)
@@ -301,7 +306,8 @@ def main():
                     if meta_text:
                         st.caption(meta_text)
 
-    if prompt := st.chat_input("대화 내용을 입력해 주세요.", on_submit=disable_input, args=(True,), disabled=st.session_state.processing):
+    st.chat_input("대화 내용을 입력해 주세요.", key="chat_prompt", on_submit=submit_prompt, disabled=st.session_state.processing)
+    if prompt := st.session_state.pop("pending_prompt", None):
         user_name = st.session_state.get("user_name", "").strip()
         if not user_name:
             st.warning('대화명을 입력해 주세요!', icon='⚠️')
