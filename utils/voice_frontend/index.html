@@ -32,7 +32,7 @@ mic.onclick=()=>{
 };
 cancel.onclick=()=>{cancelled=true;recognition?.abort();statusEl.textContent='취소했습니다.';};
 replay.onclick=()=>{if(args.reply?.text)say(args.reply.text);};
-window.addEventListener('message',e=>{if(e.source!==parent||e.data?.type!=='streamlit:render')return;args=e.data.args||{};const reply=args.reply;if(reply&&reply.id!==lastReply){lastReply=reply.id;if(reply.id===pending){waiting=false;clearTimeout(watchdog);pending=null;replay.hidden=false;say(reply.text);}}if(!Recognition)statusEl.textContent='이 브라우저는 음성 인식을 지원하지 않습니다. Chrome에서 열어 주세요.';else if(!args.enabled&&!waiting&&!speaking)statusEl.textContent='대화명을 먼저 입력해 주세요.';else if(!listening&&!waiting&&!speaking)statusEl.textContent='말하기를 누르고 바로 이야기하세요.';controls();send('streamlit:setFrameHeight',{height:190});});
+window.addEventListener('message',e=>{if(e.source!==parent||e.data?.type!=='streamlit:render')return;args=e.data.args||{};const reply=args.reply;if(reply&&reply.id!==lastReply){lastReply=reply.id;if(reply.id===pending){waiting=false;clearTimeout(watchdog);pending=null;replay.hidden=false;say(reply.text);}}if(!Recognition)statusEl.textContent='이 브라우저는 음성 인식을 지원하지 않습니다. Chrome에서 열어 주세요.';else if(!args.enabled&&!waiting&&!speaking)statusEl.textContent=args.busy?'답변을 생성하고 있어요.':'대화명을 먼저 입력해 주세요.';else if(!listening&&!waiting&&!speaking)statusEl.textContent='말하기를 누르고 바로 이야기하세요.';controls();send('streamlit:setFrameHeight',{height:190});});
 window.addEventListener('pagehide',()=>{cancelled=true;recognition?.abort();speechSynthesis?.cancel();clearTimeout(watchdog);});
 send('streamlit:componentReady',{apiVersion:1});send('streamlit:setFrameHeight',{height:190});
 </script></body></html>

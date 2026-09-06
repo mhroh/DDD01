@@ -294,6 +294,8 @@ def main():
                 disabled=st.session_state.processing,
             )
 
+    voice_event = voice_input(bool(user_name) and not st.session_state.processing)
+
     # 챗 메시지 출력
     for idx, message in enumerate(st.session_state.messages):
         if idx > 0:
@@ -307,7 +309,6 @@ def main():
                     if meta_text:
                         st.caption(meta_text)
 
-    voice_event = voice_input(bool(user_name) and not st.session_state.processing)
     st.chat_input("대화 내용을 입력해 주세요.", key="chat_prompt", on_submit=submit_prompt, disabled=st.session_state.processing)
     prompt = st.session_state.pop("pending_prompt", None)
     voice_id = None

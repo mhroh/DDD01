@@ -9,6 +9,7 @@ _component = declare_component('idebate_voice', path=str(Path(__file__).parent /
 def voice_input(enabled):
     event = _component(
         enabled=enabled,
+        busy=st.session_state.get('processing', False),
         reply=st.session_state.get('voice_reply'),
         key='voice_control',
         default=None,
