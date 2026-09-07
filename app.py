@@ -296,6 +296,9 @@ def main():
 
     voice_event = voice_input(bool(user_name) and not st.session_state.processing)
 
+    if st.session_state.get("response_model"):
+        st.caption("응답 모델: " + st.session_state["response_model"])
+
     # 챗 메시지 출력
     for idx, message in enumerate(st.session_state.messages):
         if idx > 0:
@@ -397,6 +400,8 @@ def execute_prompt(messages):
     설정된 파라미터에 따라 AI 모델에 요청을 보내고, 응답 스트림을 반환합니다.
     """
     setupInfo = st.session_state['setupInfo']
+    # Explicit model selection for this classroom deployment.
+    setupInfo["model"] = "claude-sonnet-5"
     client = st.session_state["bot"]
     
     try:
@@ -477,8 +482,7 @@ def message_processing(stream, output = None):
             if getattr(chunk.delta, "type", None) == "text_delta":
                 full_response += chunk.delta.text
         elif chunk.type == "message_start":
-            # 메시지 시작 이벤트 처리 (필요한 경우)
-            pass
+            st.session_state.response_model = chunk.message.model
         elif chunk.type == "message_delta":
             # 메시지 델타 이벤트 처리 (필요한 경우)
             pass
