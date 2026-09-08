@@ -294,8 +294,6 @@ def main():
                 disabled=st.session_state.processing,
             )
 
-    voice_event = voice_input(bool(user_name) and not st.session_state.processing)
-
     if st.session_state.get("response_model"):
         st.caption("응답 모델: " + st.session_state["response_model"])
 
@@ -312,7 +310,10 @@ def main():
                     if meta_text:
                         st.caption(meta_text)
 
-    st.chat_input("대화 내용을 입력해 주세요.", key="chat_prompt", on_submit=submit_prompt, disabled=st.session_state.processing)
+    # Keep one stable voice component beside the pinned chat input on every rerun.
+    with st.bottom:
+        voice_event = voice_input(bool(user_name) and not st.session_state.processing)
+        st.chat_input("대화 내용을 입력해 주세요.", key="chat_prompt", on_submit=submit_prompt, disabled=st.session_state.processing)
     prompt = st.session_state.pop("pending_prompt", None)
     voice_id = None
     if not prompt and voice_event:
